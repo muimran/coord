@@ -1,5 +1,7 @@
 const config = window.COORDINATE_REVIEW_CONFIG || {};
-const SAVE_ENDPOINT = config.saveEndpoint || "";
+const GITHUB_DISPATCH_URL = config.githubDispatchUrl || "";
+const GITHUB_REF = config.githubRef || "main";
+const GITHUB_TOKEN = config.githubToken || "";
 const FEED_PATH = config.unresolvedFeedPath || "../data/review/unresolved_stations.json";
 const LOCAL_REVIEWED_KEY = "coordinate-review-reviewed-ids";
 
@@ -95,8 +97,8 @@ async function copyText(text, successLabel) {
 async function saveCoordinate(event) {
   event.preventDefault();
   if (!state.current) return;
-  if (!SAVE_ENDPOINT || SAVE_ENDPOINT.includes("YOUR-SECURE-ENDPOINT")) {
-    setMessage("Set review_site/config.js with your secure save endpoint first.", "error");
+  if (!GITHUB_DISPATCH_URL || !GITHUB_TOKEN || GITHUB_TOKEN.includes("PASTE_YOUR_FINE_GRAINED_GITHUB_TOKEN_HERE")) {
+    setMessage("Set review_site/config.js with your GitHub token and dispatch URL first.", "error");
     return;
   }
   const parsed = parseCoordinateInput(el.coordinateInput.value);
@@ -105,16 +107,24 @@ async function saveCoordinate(event) {
     return;
   }
 
-  const response = await fetch(SAVE_ENDPOINT, {
+  const response = await fetch(GITHUB_DISPATCH_URL, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/vnd.github+json",
+      Authorization: `Bearer ${GITHUB_TOKEN}`,
+      "X-GitHub-Api-Version": "2022-11-28",
+    },
     body: JSON.stringify({
-      station_result_id: state.current.station_result_id,
-      latitude: parsed.latitude,
-      longitude: parsed.longitude,
-      center_name_bn: state.current.center_name_bn,
-      constituency_no: state.current.constituency_no,
-      constituency_name_bn: state.current.constituency_name_bn,
+      ref: GITHUB_REF,
+      inputs: {
+        station_result_id: String(state.current.station_result_id),
+        latitude: String(parsed.latitude),
+        longitude: String(parsed.longitude),
+        center_name_bn: state.current.center_name_bn || "",
+        constituency_no: String(state.current.constituency_no || ""),
+        constituency_name_bn: state.current.constituency_name_bn || "",
+      },
     }),
   });
 

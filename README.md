@@ -11,9 +11,13 @@ It contains:
 The frontend is static. It needs a secure endpoint that triggers the GitHub Action with
 `workflow_dispatch` inputs.
 
+If you are willing to accept the security risk, you can skip the secure endpoint and call the
+GitHub Actions workflow directly from the browser by putting a fine-grained GitHub token into
+`review_site/config.js`.
+
 After copying:
 1. Edit `review_site/config.js`
-2. Set your real secure save endpoint URL
-3. Enable GitHub Pages
-4. Add the workflow file
-5. Configure your secure endpoint with a GitHub token
+2. Paste a fine-grained GitHub token into `githubToken`
+3. Keep `githubDispatchUrl` pointing at your repo workflow
+4. Enable GitHub Pages
+5. Accept that anyone who inspects the frontend can reuse that token
