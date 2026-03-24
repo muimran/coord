@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coordinate Review</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="panel panel--header">
+        <div>
+          <p class="eyebrow">Coordinate Review</p>
+          <h1>Missing Polling Centre Coordinates</h1>
+          <p class="lede">
+            Copy the centre name, search it in Google Maps, paste the coordinate pair, and save.
+          </p>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <span class="stat__label">Remaining in feed</span>
+            <strong class="stat__value" id="remainingCount">-</strong>
+          </div>
+          <div class="stat">
+            <span class="stat__label">Reviewed locally</span>
+            <strong class="stat__value" id="localReviewedCount">-</strong>
+          </div>
+          <div class="stat">
+            <span class="stat__label">Current station</span>
+            <strong class="stat__value" id="currentIndex">-</strong>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel station">
+        <div class="station__topline">
+          <span class="pill" id="seatBadge">Seat</span>
+          <span class="pill pill--muted" id="methodBadge">Method</span>
+        </div>
+
+        <h2 class="station__name" id="centerName">Loading…</h2>
+
+        <div class="station__grid">
+          <div>
+            <span class="label">District</span>
+            <div class="value" id="districtValue">-</div>
+          </div>
+          <div>
+            <span class="label">Upazila</span>
+            <div class="value" id="upazilaValue">-</div>
+          </div>
+          <div>
+            <span class="label">Union / Municipality / Ward</span>
+            <div class="value" id="adminHintValue">-</div>
+          </div>
+          <div>
+            <span class="label">Canonical admin</span>
+            <div class="value" id="canonicalValue">-</div>
+          </div>
+          <div>
+            <span class="label">Centre serial</span>
+            <div class="value" id="serialValue">-</div>
+          </div>
+          <div>
+            <span class="label">Station ID</span>
+            <div class="value" id="stationIdValue">-</div>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button id="copyCenterName" type="button">Copy centre name</button>
+          <button id="copySearchText" type="button">Copy search text</button>
+          <a id="googleMapsLink" href="#" target="_blank" rel="noreferrer">Open Google Maps</a>
+          <button id="nextRandom" type="button" class="button-secondary">Skip / random next</button>
+        </div>
+
+        <form id="coordinateForm" class="coordinate-form">
+          <label for="coordinateInput">Paste coordinates</label>
+          <input
+            id="coordinateInput"
+            name="coordinates"
+            type="text"
+            placeholder="23.780887, 90.279237"
+            autocomplete="off"
+          />
+          <p class="hint">Use `latitude, longitude` format.</p>
+          <button id="saveCoordinate" type="submit">Save coordinates</button>
+        </form>
+
+        <p id="message" class="message" aria-live="polite"></p>
+      </section>
+    </main>
+
+    <script src="./config.js"></script>
+    <script src="./app.js" defer></script>
+  </body>
+</html>
