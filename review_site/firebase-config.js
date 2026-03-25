@@ -13,9 +13,4 @@ const firebaseConfig = {
   appId: "1:121998956871:web:a5ef3600c64016f9ea1462"
 };
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-
-export const allowedEmails = [
-  // "your-email@example.com",
-];
+export const allowedEmails = ["your@gmail.com"];
