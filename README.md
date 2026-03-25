@@ -14,8 +14,13 @@ Current default flow in this repo:
 
 ## Data import helper
 
+- `scripts/firebase/build_unresolved_rich_feed.py`
+  - builds `data/review/unresolved_stations_rich.json` from:
+    - `data/derived/sveltekit_app_seed/stations.csv`
+    - `data/derived/sveltekit_app_seed/station_admin_membership.csv`
 - `scripts/firebase/import_unresolved_to_firestore.mjs`
-  - one-time import of `data/review/unresolved_stations.json` into Firestore collection `stations`
+  - safe upsert into Firestore `stations`
+  - preserves already reviewed docs (`status=done` or existing coordinates)
 
 ## Legacy backend files
 
