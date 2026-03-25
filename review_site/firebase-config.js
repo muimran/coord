@@ -15,3 +15,7 @@ const firebaseConfig = {
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
+
+export const allowedEmails = [
+  // "your-email@example.com",
+];
