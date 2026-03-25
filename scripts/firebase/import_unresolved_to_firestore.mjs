@@ -8,6 +8,8 @@ const repoRoot = path.resolve(scriptDir, "../..");
 const serviceAccountPath = process.env.FIREBASE_SERVICE_ACCOUNT || path.join(repoRoot, "serviceAccountKey.json");
 const unresolvedPath =
   process.env.UNRESOLVED_JSON_PATH || path.join(repoRoot, "data/review/unresolved_stations_rich.json");
+const unresolvedCsvPath =
+  process.env.UNRESOLVED_CSV_PATH || path.join(repoRoot, "data/review/stations_no_coordinates.csv");
 const collectionName = process.env.FIRESTORE_COLLECTION || "stations";
 
 function hasValue(v) {
@@ -27,12 +29,65 @@ function sanitizeSourceRow(row) {
   return clean;
 }
 
-const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
-const unresolvedRows = JSON.parse(fs.readFileSync(unresolvedPath, "utf8"));
+function parseCsv(content) {
+  const rows = [];
+  const lines = content.split(/\r?\n/).filter((line) => line.length > 0);
+  if (lines.length === 0) return rows;
 
-if (!Array.isArray(unresolvedRows)) {
-  throw new Error("Unresolved JSON must be an array.");
+  function parseLine(line) {
+    const values = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQuotes && line[i + 1] === '"') {
+          cur += '"';
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === "," && !inQuotes) {
+        values.push(cur);
+        cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    values.push(cur);
+    return values;
+  }
+
+  const headers = parseLine(lines[0]).map((h) => h.trim());
+  for (let i = 1; i < lines.length; i += 1) {
+    const vals = parseLine(lines[i]);
+    const row = {};
+    for (let j = 0; j < headers.length; j += 1) {
+      row[headers[j]] = vals[j] ?? "";
+    }
+    rows.push(row);
+  }
+  return rows;
 }
+
+function loadSourceRows() {
+  if (fs.existsSync(unresolvedCsvPath)) {
+    const raw = fs.readFileSync(unresolvedCsvPath, "utf8");
+    const rows = parseCsv(raw);
+    console.log(`Loaded CSV source: ${unresolvedCsvPath} (${rows.length} rows)`);
+    return rows;
+  }
+  if (fs.existsSync(unresolvedPath)) {
+    const rows = JSON.parse(fs.readFileSync(unresolvedPath, "utf8"));
+    if (!Array.isArray(rows)) throw new Error("Unresolved JSON must be an array.");
+    console.log(`Loaded JSON source: ${unresolvedPath} (${rows.length} rows)`);
+    return rows;
+  }
+  throw new Error(`No source file found. Checked:\n- ${unresolvedCsvPath}\n- ${unresolvedPath}`);
+}
+
+const serviceAccount = JSON.parse(fs.readFileSync(serviceAccountPath, "utf8"));
+const unresolvedRows = loadSourceRows();
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
