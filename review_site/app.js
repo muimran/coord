@@ -84,28 +84,57 @@ function isAllowedUser(user) {
 }
 
 function adminHintText(station) {
-  return (
+  const direct =
     station.union_name_bn ||
     station.municipality_name_bn ||
     station.union_ward_name_bn ||
     station.polling_union_bn ||
-    "—"
-  );
+    station.polling_union_name_bn;
+  if (direct) return direct;
+
+  const pipeline = station.pipeline_union_name_bn || station.pipeline_ward_bn;
+  if (pipeline) {
+    return station.pipeline_upazila_name_bn ? `${pipeline} · ${station.pipeline_upazila_name_bn}` : pipeline;
+  }
+
+  if (station.assigned_admin_name_bn) {
+    return station.assigned_admin_level
+      ? `${station.assigned_admin_name_bn} (${station.assigned_admin_level})`
+      : station.assigned_admin_name_bn;
+  }
+  return "—";
 }
 
 function canonicalText(station) {
   if (!station.assigned_admin_name_bn) return "—";
-  return station.assigned_parent_name_bn
-    ? `${station.assigned_admin_name_bn} · ${station.assigned_parent_name_bn}`
+  const parent = station.assigned_parent_name_bn || station.assigned_admin_parent_name_bn || "";
+  return parent
+    ? `${station.assigned_admin_name_bn} · ${parent}`
     : station.assigned_admin_name_bn;
 }
 
 function buildSearchText(station) {
+  const adminHint =
+    station.union_name_bn ||
+    station.municipality_name_bn ||
+    station.union_ward_name_bn ||
+    station.polling_union_name_bn ||
+    station.pipeline_union_name_bn ||
+    station.assigned_admin_name_bn ||
+    "";
+  const upazilaHint =
+    station.upazilla_name_bn ||
+    station.polling_upazila_bn ||
+    station.polling_upazila_name_bn ||
+    station.pipeline_upazila_name_bn ||
+    station.assigned_admin_parent_name_bn ||
+    "";
+  const districtHint = station.district_name_bn || station.zilla_name_bn || "";
   const parts = [
     station.center_name_bn || "",
-    station.union_name_bn || station.municipality_name_bn || station.union_ward_name_bn || "",
-    station.upazilla_name_bn || "",
-    station.district_name_bn || "",
+    adminHint,
+    upazilaHint,
+    districtHint,
     "Bangladesh",
   ];
   return parts.filter(Boolean).join(", ");
@@ -116,8 +145,14 @@ function renderStation(station) {
   el.seatBadge.textContent = `${station.constituency_no || ""} · ${station.constituency_name_bn || ""}`;
   el.methodBadge.textContent = station.location_method || "missing_coordinate";
   el.centerName.textContent = station.center_name_bn || "—";
-  el.districtValue.textContent = station.district_name_bn || "—";
-  el.upazilaValue.textContent = station.upazilla_name_bn || station.polling_upazila_bn || "—";
+  el.districtValue.textContent = station.district_name_bn || station.zilla_name_bn || "—";
+  el.upazilaValue.textContent =
+    station.upazilla_name_bn ||
+    station.polling_upazila_bn ||
+    station.polling_upazila_name_bn ||
+    station.pipeline_upazila_name_bn ||
+    station.assigned_admin_parent_name_bn ||
+    "—";
   el.adminHintValue.textContent = adminHintText(station);
   el.canonicalValue.textContent = canonicalText(station);
   el.serialValue.textContent = station.center_serial || "—";
