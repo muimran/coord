@@ -1,34 +1,28 @@
-# Coordinate Review Bundle (Backend Save)
+# Coordinate Review Bundle (Firebase Frontend)
 
-Use this bundle for a simple hosted review tool with direct API save.
+Current default flow in this repo:
 
-## Included
+- `review_site/` runs on GitHub Pages
+- Firebase Auth controls sign-in
+- Firestore stores unresolved stations and saved coordinates
 
-- `review_site/` web UI
-- `data/review/unresolved_stations.json` unresolved queue
-- `data/review/coordinate_manual_overrides.csv` saved overrides
-- `scripts/review/run_coordinate_review_server.py` backend API + static host
-- `Procfile` startup command for Railway/Heroku-style hosts
-- `render.yaml` optional Render blueprint
-- `scripts/review/DEPLOY.md` deployment guide
+## Files to edit first
 
-## Why this version
+1. `review_site/firebase-config.js`
+   - paste your Firebase web config
+   - optionally add allowed reviewer emails
 
-- No GitHub token in browser code.
-- One-click save from UI (`/api/save-coordinate`).
-- Optional HTTP basic auth for reviewer access.
+## Data import helper
 
-## Quick start
+- `scripts/firebase/import_unresolved_to_firestore.mjs`
+  - one-time import of `data/review/unresolved_stations.json` into Firestore collection `stations`
 
-```bash
-REVIEW_UNRESOLVED_FEED_PATH=data/review/unresolved_stations.json \
-REVIEW_OVERRIDES_PATH=data/review/coordinate_manual_overrides.csv \
-REVIEW_STATIC_DIR=review_site \
-REVIEW_AUTH_USER=reviewer \
-REVIEW_AUTH_PASSWORD=strong-password \
-python3 scripts/review/run_coordinate_review_server.py --host 0.0.0.0
-```
+## Legacy backend files
 
-Then open:
+The repo still contains backend deployment files from the older Render/Railway path:
 
-- `http://127.0.0.1:8011`
+- `scripts/review/run_coordinate_review_server.py`
+- `Procfile`
+- `render.yaml`
+
+You can ignore them if you are using Firebase-only hosting.

@@ -153,6 +153,15 @@ h1 {
   flex-wrap: wrap;
 }
 
+.auth-actions {
+  margin-top: 0;
+  align-items: center;
+}
+
+.auth-actions .hint {
+  margin-left: 6px;
+}
+
 button,
 a {
   appearance: none;
@@ -169,6 +178,11 @@ button,
 a[href] {
   background: var(--accent);
   color: #fff;
+}
+
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
 }
 
 .button-secondary,
