@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: coordinate-review
+    env: python
+    plan: free
+    autoDeploy: true
+    buildCommand: "echo 'No build dependencies'"
+    startCommand: "python3 scripts/review/run_coordinate_review_server.py --host 0.0.0.0"
+    envVars:
+      - key: REVIEW_UNRESOLVED_FEED_PATH
+        value: data/review/unresolved_stations.json
+      - key: REVIEW_OVERRIDES_PATH
+        value: data/review/coordinate_manual_overrides.csv
+      - key: REVIEW_STATIC_DIR
+        value: review_site
+      - key: REVIEW_AUTH_USER
+        sync: false
+      - key: REVIEW_AUTH_PASSWORD
+        sync: false

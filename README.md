@@ -1,23 +1,34 @@
-# GitHub Coordinate Review Bundle
+# Coordinate Review Bundle (Backend Save)
 
-Copy this folder structure into your GitHub repo root.
+Use this bundle for a simple hosted review tool with direct API save.
 
-It contains:
-- `review_site/` static review UI for GitHub Pages
-- `data/review/unresolved_stations.json` unresolved coordinate queue
-- `data/review/coordinate_manual_overrides.csv` saved overrides log
-- `.github/workflows/save-coordinate.yml` workflow to upsert a saved coordinate
+## Included
 
-The frontend is static. It needs a secure endpoint that triggers the GitHub Action with
-`workflow_dispatch` inputs.
+- `review_site/` web UI
+- `data/review/unresolved_stations.json` unresolved queue
+- `data/review/coordinate_manual_overrides.csv` saved overrides
+- `scripts/review/run_coordinate_review_server.py` backend API + static host
+- `Procfile` startup command for Railway/Heroku-style hosts
+- `render.yaml` optional Render blueprint
+- `scripts/review/DEPLOY.md` deployment guide
 
-If you are willing to accept the security risk, you can skip the secure endpoint and call the
-GitHub Actions workflow directly from the browser by putting a fine-grained GitHub token into
-`review_site/config.js`.
+## Why this version
 
-After copying:
-1. Edit `review_site/config.js`
-2. Paste a fine-grained GitHub token into `githubToken`
-3. Keep `githubDispatchUrl` pointing at your repo workflow
-4. Enable GitHub Pages
-5. Accept that anyone who inspects the frontend can reuse that token
+- No GitHub token in browser code.
+- One-click save from UI (`/api/save-coordinate`).
+- Optional HTTP basic auth for reviewer access.
+
+## Quick start
+
+```bash
+REVIEW_UNRESOLVED_FEED_PATH=data/review/unresolved_stations.json \
+REVIEW_OVERRIDES_PATH=data/review/coordinate_manual_overrides.csv \
+REVIEW_STATIC_DIR=review_site \
+REVIEW_AUTH_USER=reviewer \
+REVIEW_AUTH_PASSWORD=strong-password \
+python3 scripts/review/run_coordinate_review_server.py --host 0.0.0.0
+```
+
+Then open:
+
+- `http://127.0.0.1:8011`
