@@ -23,6 +23,8 @@ const BD_BOUNDS = { minLat: 20.0, maxLat: 27.5, minLon: 87.0, maxLon: 93.5 };
 const STATIONS_COLLECTION = "stations";
 const STATUS_PENDING = "pending";
 const STATUS_DONE = "done";
+const OLC_ALPHABET = "23456789CFGHJMPQRVWX";
+const OLC_PAIR_RES = [20.0, 1.0, 0.05, 0.0025, 0.000125];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -167,11 +169,13 @@ function renderStation(station) {
 function parseCoordinateInput(value) {
   const cleaned = value.trim().replace(/\s+/g, "");
   const match = cleaned.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
-  if (!match) return null;
-  return {
-    latitude: Number(match[1]),
-    longitude: Number(match[2]),
-  };
+  if (match) {
+    return {
+      latitude: Number(match[1]),
+      longitude: Number(match[2]),
+    };
+  }
+  return decodeFullPlusCode(value);
 }
 
 function coordinatesInBounds(latitude, longitude) {
@@ -181,6 +185,76 @@ function coordinatesInBounds(latitude, longitude) {
     longitude >= BD_BOUNDS.minLon &&
     longitude <= BD_BOUNDS.maxLon
   );
+}
+
+function extractPlusCodeCandidate(value) {
+  const upper = String(value || "").toUpperCase();
+  const candidates = upper.split(/[\s,;]+/).filter(Boolean);
+  for (const token of candidates) {
+    if (token.includes("+")) return token;
+  }
+  return null;
+}
+
+function decodeFullPlusCode(rawValue) {
+  const token = extractPlusCodeCandidate(rawValue);
+  if (!token) return null;
+
+  const plusIndex = token.indexOf("+");
+  if (plusIndex < 0) return null;
+
+  const left = token.slice(0, plusIndex).replace(/0/g, "");
+  const right = token.slice(plusIndex + 1).replace(/0/g, "");
+  // Require a full code (at least 8 chars before '+').
+  if (left.length < 8 || right.length < 2) return null;
+
+  const code = `${left}+${right}`;
+  const codeNoPlus = `${left}${right}`;
+  if (codeNoPlus.length < 10) return null;
+
+  for (const ch of codeNoPlus) {
+    if (!OLC_ALPHABET.includes(ch)) return null;
+  }
+
+  let lat = -90.0;
+  let lon = -180.0;
+  let latPlace = OLC_PAIR_RES[OLC_PAIR_RES.length - 1];
+  let lonPlace = OLC_PAIR_RES[OLC_PAIR_RES.length - 1];
+
+  const pairCount = Math.min(10, codeNoPlus.length);
+  for (let i = 0; i < pairCount; i += 2) {
+    const pairPos = Math.floor(i / 2);
+    latPlace = OLC_PAIR_RES[pairPos];
+    lonPlace = OLC_PAIR_RES[pairPos];
+    const latVal = OLC_ALPHABET.indexOf(codeNoPlus[i]);
+    const lonVal = OLC_ALPHABET.indexOf(codeNoPlus[i + 1]);
+    if (latVal < 0 || lonVal < 0) return null;
+    lat += latVal * latPlace;
+    lon += lonVal * lonPlace;
+  }
+
+  // Grid refinement beyond 10 digits (4 columns x 5 rows).
+  let gridLatPlace = latPlace / 5.0;
+  let gridLonPlace = lonPlace / 4.0;
+  for (let i = 10; i < codeNoPlus.length; i += 1) {
+    const v = OLC_ALPHABET.indexOf(codeNoPlus[i]);
+    if (v < 0) return null;
+    const row = Math.floor(v / 4);
+    const col = v % 4;
+    lat += row * gridLatPlace;
+    lon += col * gridLonPlace;
+    latPlace = gridLatPlace;
+    lonPlace = gridLonPlace;
+    gridLatPlace /= 5.0;
+    gridLonPlace /= 4.0;
+  }
+
+  return {
+    latitude: Number((lat + latPlace / 2.0).toFixed(8)),
+    longitude: Number((lon + lonPlace / 2.0).toFixed(8)),
+    source: "plus_code",
+    plusCode: code,
+  };
 }
 
 async function refreshStats() {
@@ -219,7 +293,7 @@ async function saveCoordinate(event) {
   if (!state.current) return;
   const parsed = parseCoordinateInput(el.coordinateInput.value);
   if (!parsed) {
-    setMessage("Use `latitude, longitude` format.", "error");
+    setMessage("Use `latitude, longitude` or a full Plus Code.", "error");
     return;
   }
   if (!coordinatesInBounds(parsed.latitude, parsed.longitude)) {
