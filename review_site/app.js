@@ -167,15 +167,65 @@ function renderStation(station) {
 }
 
 function parseCoordinateInput(value) {
-  const cleaned = value.trim().replace(/\s+/g, "");
+  const direct = parseLatLonPair(value);
+  if (direct) return direct;
+  const fromMapsUrl = decodeGoogleMapsUrlCoordinates(value);
+  if (fromMapsUrl) return fromMapsUrl;
+  return decodeFullPlusCode(value);
+}
+
+function parseLatLonPair(value) {
+  const cleaned = String(value || "").trim().replace(/\s+/g, "");
   const match = cleaned.match(/^(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)$/);
-  if (match) {
+  if (!match) return null;
+  return {
+    latitude: Number(match[1]),
+    longitude: Number(match[2]),
+  };
+}
+
+function decodeGoogleMapsUrlCoordinates(value) {
+  const raw = String(value || "").trim();
+  if (!raw.startsWith("http://") && !raw.startsWith("https://")) return null;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  const host = url.hostname.toLowerCase();
+  if (!host.includes("google.") || !host.includes("maps")) return null;
+
+  // 1) Most common format: .../@22.4936781,89.0085818,17z/...
+  const atMatch = decodeURIComponent(url.pathname).match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|\/|$)/);
+  if (atMatch) {
     return {
-      latitude: Number(match[1]),
-      longitude: Number(match[2]),
+      latitude: Number(atMatch[1]),
+      longitude: Number(atMatch[2]),
+      source: "google_maps_url",
     };
   }
-  return decodeFullPlusCode(value);
+
+  // 2) Place data segment: ...!3d22.4936781!4d89.0085818...
+  const dataSegment = decodeURIComponent(`${url.pathname}${url.search}`);
+  const dMatch = dataSegment.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (dMatch) {
+    return {
+      latitude: Number(dMatch[1]),
+      longitude: Number(dMatch[2]),
+      source: "google_maps_url",
+    };
+  }
+
+  // 3) Query parameters sometimes carry coordinate pair.
+  const ll = parseLatLonPair(url.searchParams.get("ll"));
+  if (ll) return { ...ll, source: "google_maps_url" };
+  const q = parseLatLonPair(url.searchParams.get("q"));
+  if (q) return { ...q, source: "google_maps_url" };
+  const query = parseLatLonPair(url.searchParams.get("query"));
+  if (query) return { ...query, source: "google_maps_url" };
+
+  return null;
 }
 
 function coordinatesInBounds(latitude, longitude) {
@@ -293,7 +343,7 @@ async function saveCoordinate(event) {
   if (!state.current) return;
   const parsed = parseCoordinateInput(el.coordinateInput.value);
   if (!parsed) {
-    setMessage("Use `latitude, longitude` or a full Plus Code.", "error");
+    setMessage("Use `latitude, longitude`, a full Plus Code, or a Google Maps place URL.", "error");
     return;
   }
   if (!coordinatesInBounds(parsed.latitude, parsed.longitude)) {
