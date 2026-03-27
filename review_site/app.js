@@ -185,8 +185,36 @@ function parseLatLonPair(value) {
 }
 
 function decodeGoogleMapsUrlCoordinates(value) {
-  const raw = String(value || "").trim();
-  if (!raw.startsWith("http://") && !raw.startsWith("https://")) return null;
+  const input = String(value || "").trim();
+  if (!input) return null;
+
+  // Fast path for pasted URL fragments that still carry coordinates.
+  const rawDirect = decodeURIComponentSafe(input);
+  const directAt = rawDirect.match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|\/|$)/);
+  if (directAt) {
+    return {
+      latitude: Number(directAt[1]),
+      longitude: Number(directAt[2]),
+      source: "google_maps_url",
+    };
+  }
+  const direct3d4d = rawDirect.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
+  if (direct3d4d) {
+    return {
+      latitude: Number(direct3d4d[1]),
+      longitude: Number(direct3d4d[2]),
+      source: "google_maps_url",
+    };
+  }
+
+  let raw = input;
+  if (!raw.startsWith("http://") && !raw.startsWith("https://")) {
+    if (raw.startsWith("www.") || raw.startsWith("google.") || raw.startsWith("maps.")) {
+      raw = `https://${raw}`;
+    } else {
+      return null;
+    }
+  }
   let url;
   try {
     url = new URL(raw);
@@ -194,10 +222,12 @@ function decodeGoogleMapsUrlCoordinates(value) {
     return null;
   }
   const host = url.hostname.toLowerCase();
-  if (!host.includes("google.") || !host.includes("maps")) return null;
+  const isGoogleHost = /(^|\.)google\./.test(host) || host === "maps.app.goo.gl";
+  const looksMapsPath = url.pathname.includes("/maps") || url.pathname.includes("/place/") || url.pathname.includes("/search/");
+  if (!isGoogleHost || (!host.includes("maps") && !looksMapsPath)) return null;
 
   // 1) Most common format: .../@22.4936781,89.0085818,17z/...
-  const atMatch = decodeURIComponent(url.pathname).match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|\/|$)/);
+  const atMatch = decodeURIComponentSafe(url.pathname).match(/@(-?\d+(?:\.\d+)?),(-?\d+(?:\.\d+)?)(?:,|\/|$)/);
   if (atMatch) {
     return {
       latitude: Number(atMatch[1]),
@@ -207,7 +237,7 @@ function decodeGoogleMapsUrlCoordinates(value) {
   }
 
   // 2) Place data segment: ...!3d22.4936781!4d89.0085818...
-  const dataSegment = decodeURIComponent(`${url.pathname}${url.search}`);
+  const dataSegment = decodeURIComponentSafe(`${url.pathname}${url.search}`);
   const dMatch = dataSegment.match(/!3d(-?\d+(?:\.\d+)?)!4d(-?\d+(?:\.\d+)?)/);
   if (dMatch) {
     return {
@@ -226,6 +256,14 @@ function decodeGoogleMapsUrlCoordinates(value) {
   if (query) return { ...query, source: "google_maps_url" };
 
   return null;
+}
+
+function decodeURIComponentSafe(value) {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch {
+    return String(value || "");
+  }
 }
 
 function coordinatesInBounds(latitude, longitude) {
