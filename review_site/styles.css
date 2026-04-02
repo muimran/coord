@@ -249,6 +249,20 @@ button:disabled {
   gap: 8px;
 }
 
+.checkline {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 0.95rem;
+  color: var(--ink);
+  user-select: none;
+}
+
+.checkline input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+
 .coordinate-form label {
   font-weight: 700;
   font-size: 1.01rem;

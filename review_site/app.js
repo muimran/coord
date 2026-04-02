@@ -23,6 +23,7 @@ const BD_BOUNDS = { minLat: 20.0, maxLat: 27.5, minLon: 87.0, maxLon: 93.5 };
 const STATIONS_COLLECTION = "stations";
 const STATUS_PENDING = "pending";
 const STATUS_DONE = "done";
+const QUEUE_VERSION = "v1";
 const OLC_ALPHABET = "23456789CFGHJMPQRVWX";
 const OLC_PAIR_RES = [20.0, 1.0, 0.05, 0.0025, 0.000125];
 
@@ -35,12 +36,16 @@ const state = {
   user: null,
   current: null,
   pendingRows: [],
+  pendingById: new Map(),
+  queueOrder: [],
+  queueCursor: 0,
 };
 
 const el = {
   remainingCount: document.getElementById("remainingCount"),
   exactCount: document.getElementById("exactCount"),
   overrideCount: document.getElementById("overrideCount"),
+  queueLeftCount: document.getElementById("queueLeftCount"),
   seatBadge: document.getElementById("seatBadge"),
   methodBadge: document.getElementById("methodBadge"),
   centerName: document.getElementById("centerName"),
@@ -56,6 +61,7 @@ const el = {
   nextRandom: document.getElementById("nextRandom"),
   coordinateForm: document.getElementById("coordinateForm"),
   coordinateInput: document.getElementById("coordinateInput"),
+  approximateToggle: document.getElementById("approximateToggle"),
   message: document.getElementById("message"),
   loginBtn: document.getElementById("loginBtn"),
   logoutBtn: document.getElementById("logoutBtn"),
@@ -65,6 +71,68 @@ const el = {
 function setMessage(text, kind = "") {
   el.message.textContent = text;
   el.message.className = `message${kind ? ` message--${kind}` : ""}`;
+}
+
+function stationIdOf(row) {
+  return String(row?.station_result_id || row?.id || "");
+}
+
+function queueKey(name) {
+  const userPart = (state.user?.email || "anon").toLowerCase();
+  return `coord_review_queue_${firebaseConfig.projectId}_${userPart}_${QUEUE_VERSION}_${name}`;
+}
+
+function shuffle(list) {
+  const out = [...list];
+  for (let i = out.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+function readStoredOrder() {
+  try {
+    const raw = localStorage.getItem(queueKey("order"));
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readStoredCursor() {
+  try {
+    const raw = localStorage.getItem(queueKey("cursor"));
+    const parsed = Number.parseInt(raw || "0", 10);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveQueueState() {
+  try {
+    localStorage.setItem(queueKey("order"), JSON.stringify(state.queueOrder));
+    localStorage.setItem(queueKey("cursor"), String(state.queueCursor));
+  } catch {}
+}
+
+function updateQueueLeftCounter() {
+  if (!el.queueLeftCount) return;
+  if (!state.user) {
+    el.queueLeftCount.textContent = "-";
+    return;
+  }
+  const leftIds = new Set();
+  for (let i = state.queueCursor; i < state.queueOrder.length; i += 1) {
+    const id = state.queueOrder[i];
+    if (state.pendingById.has(id)) leftIds.add(id);
+  }
+  const currentId = stationIdOf(state.current);
+  if (currentId && state.pendingById.has(currentId)) leftIds.add(currentId);
+  el.queueLeftCount.textContent = String(leftIds.size);
 }
 
 function setSignedInUi(user) {
@@ -163,12 +231,29 @@ function renderStation(station) {
   station.copy_text = station.center_name_bn || "";
   el.googleMapsLink.href = `https://www.google.com/maps/search/${encodeURIComponent(station.search_text)}`;
   el.coordinateInput.value = "";
+  if (el.approximateToggle) el.approximateToggle.checked = false;
   setMessage("");
+}
+
+function renderEmptyStation(message = "Queue complete.") {
+  state.current = null;
+  el.seatBadge.textContent = "Seat";
+  el.methodBadge.textContent = "Method";
+  el.centerName.textContent = message;
+  el.districtValue.textContent = "-";
+  el.upazilaValue.textContent = "-";
+  el.adminHintValue.textContent = "-";
+  el.canonicalValue.textContent = "-";
+  el.serialValue.textContent = "-";
+  el.stationIdValue.textContent = "-";
+  el.googleMapsLink.href = "#";
+  el.coordinateInput.value = "";
+  if (el.approximateToggle) el.approximateToggle.checked = false;
 }
 
 function parseCoordinateInput(value) {
   const direct = parseLatLonPair(value);
-  if (direct) return direct;
+  if (direct) return { ...direct, source: "latlon_pair" };
   const fromMapsUrl = decodeGoogleMapsUrlCoordinates(value);
   if (fromMapsUrl) return fromMapsUrl;
   return decodeFullPlusCode(value);
@@ -357,19 +442,66 @@ async function refreshStats() {
   el.overrideCount.textContent = done;
 }
 
+function rebuildQueueFromPending() {
+  const pendingIds = new Set(state.pendingRows.map((row) => stationIdOf(row)).filter(Boolean));
+  const storedOrderRaw = readStoredOrder().map(String).filter(Boolean);
+  const seenOrder = [];
+  const unseenOrder = [];
+  const seenRaw = new Set(storedOrderRaw.slice(0, readStoredCursor()));
+  const knownInStored = new Set(storedOrderRaw);
+
+  for (const id of storedOrderRaw) {
+    if (!pendingIds.has(id)) continue;
+    if (seenRaw.has(id)) seenOrder.push(id);
+    else unseenOrder.push(id);
+  }
+
+  const newIds = [];
+  for (const id of pendingIds) {
+    if (!knownInStored.has(id)) newIds.push(id);
+  }
+
+  state.queueOrder = [...seenOrder, ...unseenOrder, ...shuffle(newIds)];
+  state.queueCursor = seenOrder.length;
+  saveQueueState();
+}
+
 async function loadPendingRows() {
   const snap = await getDocs(query(collection(db, STATIONS_COLLECTION), where("status", "==", STATUS_PENDING)));
   state.pendingRows = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+  state.pendingById = new Map();
+  for (const row of state.pendingRows) {
+    const id = stationIdOf(row);
+    if (!id) continue;
+    state.pendingById.set(id, row);
+  }
+  rebuildQueueFromPending();
+  updateQueueLeftCounter();
 }
 
-function loadRandomStation() {
-  if (state.pendingRows.length === 0) {
-    state.current = null;
+function loadNextQueueStation() {
+  if (state.pendingById.size === 0) {
+    renderEmptyStation("All unresolved stations have been reviewed.");
+    updateQueueLeftCounter();
     setMessage("No unresolved stations remain.", "success");
     return;
   }
-  const pick = state.pendingRows[Math.floor(Math.random() * state.pendingRows.length)];
-  renderStation(pick);
+
+  while (state.queueCursor < state.queueOrder.length) {
+    const id = state.queueOrder[state.queueCursor];
+    state.queueCursor += 1;
+    const row = state.pendingById.get(id);
+    if (!row) continue;
+    saveQueueState();
+    renderStation(row);
+    updateQueueLeftCounter();
+    return;
+  }
+
+  saveQueueState();
+  renderEmptyStation("Queue complete for this pass.");
+  updateQueueLeftCounter();
+  setMessage("Every pending station has been shown once. Refresh to rebuild a new queue.", "success");
 }
 
 async function saveCoordinate(event) {
@@ -388,6 +520,7 @@ async function saveCoordinate(event) {
     setMessage("Coordinates are outside Bangladesh bounds.", "error");
     return;
   }
+  const isApproximate = Boolean(el.approximateToggle?.checked);
 
   const stationId = String(state.current.station_result_id || state.current.id || "");
   if (!stationId) {
@@ -399,17 +532,22 @@ async function saveCoordinate(event) {
     status: STATUS_DONE,
     latitude: Number(parsed.latitude.toFixed(8)),
     longitude: Number(parsed.longitude.toFixed(8)),
+    coordinate_input_source: parsed.source || "latlon_pair",
+    coordinate_is_approximate: isApproximate,
     reviewer: state.user.email || "reviewer",
     saved_at_utc: new Date().toISOString(),
     updated_at: serverTimestamp(),
   });
 
-  state.pendingRows = state.pendingRows.filter(
-    (row) => String(row.station_result_id || row.id || "") !== stationId,
-  );
+  state.pendingRows = state.pendingRows.filter((row) => stationIdOf(row) !== stationId);
+  state.pendingById.delete(stationId);
   await refreshStats();
-  loadRandomStation();
-  setMessage("Saved. Loading the next station…", "success");
+  loadNextQueueStation();
+  if (isApproximate) {
+    setMessage("Saved as approximate. Loading the next station…", "success");
+  } else {
+    setMessage("Saved. Loading the next station…", "success");
+  }
 }
 
 async function copyText(text, successLabel) {
@@ -426,7 +564,7 @@ async function bootForUser(user) {
   }
   await refreshStats();
   await loadPendingRows();
-  loadRandomStation();
+  loadNextQueueStation();
 }
 
 el.copyCenterName.addEventListener("click", () => {
@@ -439,7 +577,7 @@ el.copySearchText.addEventListener("click", () => {
   copyText(state.current.search_text, "Search text copied.");
 });
 
-el.nextRandom.addEventListener("click", () => loadRandomStation());
+el.nextRandom.addEventListener("click", () => loadNextQueueStation());
 el.coordinateForm.addEventListener("submit", saveCoordinate);
 
 el.loginBtn.addEventListener("click", async () => {
@@ -462,8 +600,12 @@ onAuthStateChanged(auth, async (user) => {
   state.user = user;
   setSignedInUi(user);
   if (!user) {
-    state.current = null;
+    renderEmptyStation("Sign in to start review.");
     state.pendingRows = [];
+    state.pendingById = new Map();
+    state.queueOrder = [];
+    state.queueCursor = 0;
+    updateQueueLeftCounter();
     setMessage("Sign in to start review.", "");
     return;
   }

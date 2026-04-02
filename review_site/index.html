@@ -28,6 +28,10 @@
             <strong class="stat__value" id="remainingCount">-</strong>
           </div>
           <div class="stat">
+            <span class="stat__label">Queue left</span>
+            <strong class="stat__value" id="queueLeftCount">-</strong>
+          </div>
+          <div class="stat">
             <span class="stat__label">Exact now</span>
             <strong class="stat__value" id="exactCount">-</strong>
           </div>
@@ -77,7 +81,7 @@
           <button id="copyCenterName" type="button">Copy centre name</button>
           <button id="copySearchText" type="button">Copy search text</button>
           <a id="googleMapsLink" href="#" target="_blank" rel="noreferrer">Open Google Maps</a>
-          <button id="nextRandom" type="button" class="button-secondary">Skip / random next</button>
+          <button id="nextRandom" type="button" class="button-secondary">Skip / next</button>
         </div>
 
         <form id="coordinateForm" class="coordinate-form">
@@ -90,6 +94,10 @@
             autocomplete="off"
           />
           <p class="hint">Use `latitude, longitude` format.</p>
+          <label class="checkline" for="approximateToggle">
+            <input id="approximateToggle" name="approximateToggle" type="checkbox" />
+            Mark as approximate location (not exact point)
+          </label>
           <button id="saveCoordinate" type="submit">Save coordinates</button>
         </form>
 
